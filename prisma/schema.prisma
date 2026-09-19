@@ -1,0 +1,60 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  VIEWER
+}
+
+model User {
+  id        String     @id @default(cuid())
+  username  String     @unique
+  password  String     // bcrypt hash
+  role      UserRole   @default(VIEWER)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  deployLogs DeployLog[]
+
+  @@map("users")
+}
+
+model Server {
+  id          String      @id @default(cuid())
+  name        String
+  ip          String      @unique
+  port        Int         @default(5038)
+  isActive    Boolean     @default(true)
+  amiUsername String?
+  amiPassword String?
+  sshUsername String?
+  sshPassword String?
+  sshKey      String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  deployLogs  DeployLog[]
+
+  @@map("servers")
+}
+
+model DeployLog {
+  id        String   @id @default(cuid())
+  serverId  String
+  server    Server   @relation(fields: [serverId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  commands  String[] // commands that were executed
+  success   Boolean
+  output    String   // full terminal output
+  createdAt DateTime @default(now())
+
+  @@map("deploy_logs")
+}
