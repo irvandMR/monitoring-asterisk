@@ -25,7 +25,7 @@ interface ServerContextType {
   servers: AsteriskServer[];
   activeServer: AsteriskServer | null;
   isLoading: boolean;
-  setActiveServer: (server: AsteriskServer) => void;
+  setActiveServer: (server: AsteriskServer | null) => void;
   reloadServers: () => Promise<void>;
   addServer: (data: Partial<AsteriskServer> & { name: string; ip: string }) => Promise<{ success: boolean; error?: string }>;
   updateServer: (id: string, data: Partial<AsteriskServer>) => Promise<{ success: boolean; error?: string }>;
@@ -51,9 +51,9 @@ export function ServerProvider({ children }: { children: ReactNode }) {
       if (data.success && Array.isArray(data.servers)) {
         setServers(data.servers);
         setActiveServerState((prev) => {
-          if (!prev) return data.servers[0] || null;
+          if (!prev) return null; // Do not auto-select the first server
           const found = data.servers.find((s: AsteriskServer) => s.id === prev.id);
-          return found || data.servers[0] || null;
+          return found || null;
         });
       }
     } catch (err) {
@@ -97,7 +97,7 @@ export function ServerProvider({ children }: { children: ReactNode }) {
     }
   }, [servers, checkAllServers]);
 
-  const setActiveServer = (server: AsteriskServer) => {
+  const setActiveServer = (server: AsteriskServer | null) => {
     setActiveServerState(server);
   };
 

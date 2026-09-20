@@ -2,11 +2,13 @@
 
 import { PageContainer } from "@/components/layout/page-container";
 import { useServerContext } from "@/lib/contexts/server-context";
+import { useAmiContext } from "@/lib/contexts/ami-context";
 import { Server, Activity, PhoneCall, Users, Cpu, Clock, CheckCircle2, XCircle, Power } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export default function Home() {
   const { servers, serverStatuses, checkServerStatus } = useServerContext();
+  const { channels, registrations } = useAmiContext();
   const [mounted, setMounted] = useState(false);
   const [restartingServers, setRestartingServers] = useState<Record<string, boolean>>({});
 
@@ -54,7 +56,7 @@ export default function Home() {
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Active Calls</p>
-                <h3 className="text-2xl font-bold">143</h3>
+                <h3 className="text-2xl font-bold">{channels.length}</h3>
               </div>
             </div>
           </div>
@@ -66,7 +68,7 @@ export default function Home() {
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Registered Endpoints</p>
-                <h3 className="text-2xl font-bold">892</h3>
+                <h3 className="text-2xl font-bold">{registrations.length}</h3>
               </div>
             </div>
           </div>

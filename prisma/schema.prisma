@@ -31,6 +31,7 @@ model Server {
   id          String      @id @default(cuid())
   name        String
   ip          String      @unique
+  amiHost     String?     // Override host for AMI (useful for SSH Tunneling)
   port        Int         @default(5038)
   isActive    Boolean     @default(true)
   amiUsername String?

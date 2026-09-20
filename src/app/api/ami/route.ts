@@ -44,10 +44,23 @@ export async function GET(req: Request) {
       client.on("connect", () => {
         console.log(`[AMI] Connected to ${server.ip}`);
         sendEvent("connected", { message: `Connected to ${server.ip}` });
+        
+        // Auto-fetch data on this persistent connection so events flow to SSE
+        setTimeout(() => {
+          client.action({ Action: 'PJSIPShowEndpoints' });
+          client.action({ Action: 'PJSIPShowContacts' });
+          client.action({ Action: 'CoreShowChannels' });
+          client.action({ Action: 'PJSIPShowRegistrationsOutbound' });
+        }, 1000);
       });
 
       client.on("event", (event: any) => {
         sendEvent("ami_event", event);
+      });
+
+      client.on("response", (response: any) => {
+        // Forward responses to frontend for debugging
+        sendEvent("ami_event", { Event: 'Response', ...response });
       });
 
       client.on("disconnect", () => {
@@ -70,9 +83,10 @@ export async function GET(req: Request) {
       });
 
       try {
-        console.log(`[AMI] Attempting connection to ${server.ip}:${server.port}`);
+        const amiHost = server.amiHost || server.ip;
+        console.log(`[AMI] Attempting connection to ${amiHost}:${server.port}`);
         client.connect(server.amiUsername, server.amiPassword, {
-          host: server.ip,
+          host: amiHost,
           port: server.port || 5038,
         });
       } catch (err: any) {

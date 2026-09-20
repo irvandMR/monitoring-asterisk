@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Settings, Network, Terminal, Code2, FolderTree, ChevronDown, ChevronRight, Plus, Box, ShieldCheck, Contact, Radio, KeyRound, ShieldAlert, Copy, Radar } from "lucide-react";
+import { Settings, Network, Terminal, Code2, FolderTree, ChevronDown, ChevronRight, Plus, Box, ShieldCheck, Contact, Radio, KeyRound, ShieldAlert, Copy, Radar, Server } from "lucide-react";
 import { useServerContext } from "@/lib/contexts/server-context";
 import { useSidebar } from "@/lib/contexts/sidebar-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -66,7 +66,7 @@ function ProjectNavItem({ product, pathname, onItemClick }: { product: {id: stri
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { activeServer } = useServerContext();
+  const { activeServer, setActiveServer } = useServerContext();
   const { isOpen, closeSidebar } = useSidebar();
   const queryClient = useQueryClient();
   
@@ -98,6 +98,11 @@ export function Sidebar() {
     if (typeof window !== "undefined" && window.innerWidth < 1024) {
       closeSidebar();
     }
+  };
+
+  const handleLogoClick = () => {
+    setActiveServer(null);
+    handleNavClick();
   };
 
   const systemConfigs = [
@@ -132,7 +137,7 @@ export function Sidebar() {
         <div className="h-14 flex items-center px-4 border-b border-sidebar-border shrink-0">
           <Link
             href="/"
-            onClick={handleNavClick}
+            onClick={handleLogoClick}
             className="flex items-center font-bold text-sm sm:text-base text-primary hover:text-emerald-400 transition-colors truncate"
           >
             <FolderTree className="mr-2 h-5 w-5 shrink-0" />
@@ -141,109 +146,118 @@ export function Sidebar() {
         </div>
         
         {/* Navigation Items */}
-        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
-          {/* System Level Configs */}
-          <div>
-            <div className="text-xs font-mono text-muted-foreground mb-3 px-2 uppercase tracking-wider font-semibold">
-              Server Config
+        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6 flex flex-col">
+          {!activeServer ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-4 space-y-3 opacity-60">
+              <Server className="h-8 w-8 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Select a server from the top bar to view its configuration.</p>
             </div>
-            <nav className="flex flex-col space-y-1">
-              {systemConfigs.map((item) => {
-                const isActive = pathname === item.href;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={handleNavClick}
-                    title={item.name}
-                    className={`flex items-center space-x-3 px-3 py-2 rounded-md text-sm transition-colors ${
-                      isActive
-                        ? "bg-sidebar-accent text-sidebar-foreground font-medium"
-                        : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                    }`}
-                  >
-                    <item.icon className="h-4 w-4 shrink-0" />
-                    <span>{item.name}</span>
-                  </Link>
-                );
-              })}
-            </nav>
-          </div>
-
-          {/* Global Live Monitor */}
-          <div>
-            <Link 
-              href="/monitor" 
-              onClick={handleNavClick}
-              title="Live Monitor"
-              className={`flex items-center justify-between px-3 py-2 text-sm font-medium rounded-md group ${pathname === '/monitor' ? 'bg-emerald-500/10 text-emerald-500' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'}`}
-            >
-              <div className="flex items-center">
-                <Radar className="mr-3 h-4 w-4 flex-shrink-0" />
-                <span>Live Monitor</span>
+          ) : (
+            <>
+              {/* System Level Configs */}
+              <div>
+                <div className="text-xs font-mono text-muted-foreground mb-3 px-2 uppercase tracking-wider font-semibold">
+                  Server Config
+                </div>
+                <nav className="flex flex-col space-y-1">
+                  {systemConfigs.map((item) => {
+                    const isActive = pathname === item.href;
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={handleNavClick}
+                        title={item.name}
+                        className={`flex items-center space-x-3 px-3 py-2 rounded-md text-sm transition-colors ${
+                          isActive
+                            ? "bg-sidebar-accent text-sidebar-foreground font-medium"
+                            : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                        }`}
+                      >
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        <span>{item.name}</span>
+                      </Link>
+                    );
+                  })}
+                </nav>
               </div>
-              {pathname === '/monitor' && (
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-              )}
-            </Link>
-          </div>
 
-          {/* Dynamic Projects */}
-          <div>
-            <div className="flex items-center justify-between px-2 mb-3">
-              <div className="text-xs font-mono text-muted-foreground uppercase tracking-wider font-semibold">
-                Projects
+              {/* Global Live Monitor */}
+              <div>
+                <Link 
+                  href="/monitor" 
+                  onClick={handleNavClick}
+                  title="Live Monitor"
+                  className={`flex items-center justify-between px-3 py-2 text-sm font-medium rounded-md group ${pathname === '/monitor' ? 'bg-emerald-500/10 text-emerald-500' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'}`}
+                >
+                  <div className="flex items-center">
+                    <Radar className="mr-3 h-4 w-4 flex-shrink-0" />
+                    <span>Live Monitor</span>
+                  </div>
+                  {pathname === '/monitor' && (
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                  )}
+                </Link>
               </div>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-5 w-5 text-muted-foreground hover:text-primary"
-                onClick={() => setIsAddProductOpen(true)}
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-            <nav className="flex flex-col space-y-1">
-              {products?.length === 0 ? (
-                <div className="px-3 text-xs text-muted-foreground italic py-2">No projects found.</div>
-              ) : (
-                products?.map(product => (
-                  <ProjectNavItem key={product.id} product={product} pathname={pathname} onItemClick={handleNavClick} />
-                ))
-              )}
-            </nav>
-          </div>
 
-          {/* Previews */}
-          <div>
-            <div className="text-xs font-mono text-muted-foreground mb-3 px-2 uppercase tracking-wider font-semibold">
-              System Previews
-            </div>
-            <nav className="flex flex-col space-y-1">
-              {systemPreviews.map((item) => {
-                const isActive = pathname === item.href;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={handleNavClick}
-                    title={item.name}
-                    className={`flex items-center space-x-3 px-3 py-2 rounded-md text-sm transition-colors ${
-                      isActive
-                        ? "bg-sidebar-accent text-sidebar-foreground font-medium"
-                        : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                    }`}
+              {/* Dynamic Projects */}
+              <div>
+                <div className="flex items-center justify-between px-2 mb-3">
+                  <div className="text-xs font-mono text-muted-foreground uppercase tracking-wider font-semibold">
+                    Projects
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-5 w-5 text-muted-foreground hover:text-primary"
+                    onClick={() => setIsAddProductOpen(true)}
                   >
-                    <item.icon className="h-4 w-4 shrink-0" />
-                    <span>{item.name}</span>
-                  </Link>
-                );
-              })}
-            </nav>
-          </div>
+                    <Plus className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <nav className="flex flex-col space-y-1">
+                  {products?.length === 0 ? (
+                    <div className="px-3 text-xs text-muted-foreground italic py-2">No projects found.</div>
+                  ) : (
+                    products?.map(product => (
+                      <ProjectNavItem key={product.id} product={product} pathname={pathname} onItemClick={handleNavClick} />
+                    ))
+                  )}
+                </nav>
+              </div>
+
+              {/* Previews */}
+              <div>
+                <div className="text-xs font-mono text-muted-foreground mb-3 px-2 uppercase tracking-wider font-semibold">
+                  System Previews
+                </div>
+                <nav className="flex flex-col space-y-1">
+                  {systemPreviews.map((item) => {
+                    const isActive = pathname === item.href;
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={handleNavClick}
+                        title={item.name}
+                        className={`flex items-center space-x-3 px-3 py-2 rounded-md text-sm transition-colors ${
+                          isActive
+                            ? "bg-sidebar-accent text-sidebar-foreground font-medium"
+                            : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                        }`}
+                      >
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        <span>{item.name}</span>
+                      </Link>
+                    );
+                  })}
+                </nav>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Create Project Dialog */}

@@ -2,6 +2,7 @@
 
 import { PageContainer } from "@/components/layout/page-container";
 import { useServerContext } from "@/lib/contexts/server-context";
+import { useAmiContext } from "@/lib/contexts/ami-context";
 import { Radar, Search, Filter, RefreshCw, Wifi, WifiOff, AlertTriangle, Contact } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
@@ -59,19 +60,17 @@ interface MockRtp {
 
 export default function MonitorPage() {
   const { activeServer } = useServerContext();
+  const { isConnected, endpoints, contacts, channels, registrations, logs: amiLogs, clearLogs, addLog } = useAmiContext();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [containerName, setContainerName] = useState("ari-server");
+  const [dockerStatus, setDockerStatus] = useState("Disconnected");
+  
+  // Custom console logs state
+  const [cliLogs, setCliLogs] = useState<string[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [endpoints, setEndpoints] = useState<MockEndpoint[]>([]);
-  const [contacts, setContacts] = useState<MockContact[]>([]);
-  const [channels, setChannels] = useState<MockChannel[]>([]);
   const [ariApps, setAriApps] = useState<MockAriApp[]>([]);
-  const [registrations, setRegistrations] = useState<MockRegistration[]>([]);
   const [rtpStats, setRtpStats] = useState<MockRtp[]>([]);
-  const [logLines, setLogLines] = useState<string[]>([
-    `[${new Date().toISOString()}] Asterisk ready.`,
-    `[${new Date().toISOString()}] Connected to Asterisk Manager Interface.`
-  ]);
   const [dockerLogLines, setDockerLogLines] = useState<string[]>([
     "ari-server | Starting ARI server...",
     "ari-server | Connected to Asterisk at ws://127.0.0.1:8088/ari/events"
@@ -93,11 +92,9 @@ export default function MonitorPage() {
   // State for logger panel width
   const [loggerWidth, setLoggerWidth] = useState(500);
 
-  // Generate mock data when server changes (no role restriction - a server can host multiple projects)
+  // Setup default panels on server change
   useEffect(() => {
     if (!activeServer) return;
-    
-    // Set active panels
     setViews(prev => ({ 
       ...prev, 
       endpoints: true, 
@@ -106,121 +103,50 @@ export default function MonitorPage() {
       channels: true, 
       ariApps: false 
     }));
-
-    // Endpoints
-    const mockEndpoints: MockEndpoint[] = [
-      { id: "1", name: "1001", status: "Avail", contact: "10.0.2.14:5060", ping: "45ms" },
-      { id: "2", name: "1002", status: "Avail", contact: "10.0.2.15:5060", ping: "12ms" },
-      { id: "3", name: "1003", status: "Unreachable", contact: "Unknown", ping: "Timeout" },
-      { id: "4", name: "voip-trunk", status: "Avail", contact: "203.0.113.5:5060", ping: "22ms" },
-      { id: "5", name: "220121363", status: "Avail", contact: "10.0.3.50:5060", ping: "8ms" },
-    ];
-    setEndpoints(mockEndpoints);
-
-    // Dedicated PJSIP Contacts (matches `pjsip show contacts`)
-    const mockContacts: MockContact[] = [
-      { id: "c1", uri: "1001/sip:1001@10.0.2.14:5060;transport=udp", aor: "1001", hash: "99423b03d5", status: "Avail", rtt: "12.345 ms" },
-      { id: "c2", uri: "1002/sip:1002@10.0.2.15:5060;transport=udp", aor: "1002", hash: "8c92a104b1", status: "Avail", rtt: "21.120 ms" },
-      { id: "c3", uri: "1003/sip:1003@10.0.2.16:5060;transport=udp", aor: "1003", hash: "a7e89123f4", status: "Unavail", rtt: "nan" },
-      { id: "c4", uri: "voip-trunk/sip:203.0.113.5:5060;transport=udp", aor: "voip-trunk", hash: "4f128c9b20", status: "Avail", rtt: "18.450 ms" },
-      { id: "c5", uri: "220121363/sip:220121363@10.0.3.50:5060;transport=udp", aor: "220121363", hash: "3e459a11c8", status: "Avail", rtt: "8.120 ms" },
-    ];
-    setContacts(mockContacts);
-
-    // Active Channels
-    const mockChannels: MockChannel[] = [
-      { id: "ch1", channel: "PJSIP/1001-00000001", state: "Up", application: "Dial", duration: "00:02:15" },
-      { id: "ch2", channel: "PJSIP/voip-trunk-00000002", state: "Ringing", application: "Dial", duration: "00:00:05" },
-      { id: "ch3", channel: "PJSIP/220121363-00000003", state: "Up", application: "Playback", duration: "00:01:20" },
-    ];
-    setChannels(mockChannels);
-
-    // ARI Apps
-    const mockAri: MockAriApp[] = [
-      { name: "call-center-queue", subscribers: "4 Endpoint(s), 2 Channel(s)" },
-      { name: "ivr-main-menu", subscribers: "3 Endpoint(s), 12 Channel(s)" },
-      { name: "voicemail-service", subscribers: "0 Endpoint(s), 0 Channel(s)" }
-    ];
-    setAriApps(mockAri);
-
-    // Outbound Registrations
-    const mockRegs: MockRegistration[] = [
-      { id: "r1", name: "voip-trunk-reg-1/sip:103.52.146.118", auth: "voip-trunk-auth-1", status: "Registered", exp: "1433s" },
-      { id: "r2", name: "voip-trunk-reg-2/sip:103.52.146.118", auth: "voip-trunk-auth-2", status: "Registered", exp: "1696s" },
-      { id: "r3", name: "voip-trunk-reg-3/sip:103.52.146.118", auth: "voip-trunk-auth-3", status: "Rejected", exp: "-3s" },
-    ];
-    setRegistrations(mockRegs);
-
-    // RTP Stream Statistics
-    setRtpStats([
-      { id: "rtp1", channel: "PJSIP/1001-00000001", txJitter: "2ms", rxJitter: "1ms", txLoss: "0%", rxLoss: "0%" },
-      { id: "rtp2", channel: "PJSIP/220121363-00000003", txJitter: "5ms", rxJitter: "3ms", txLoss: "0.1%", rxLoss: "0%" }
-    ]);
   }, [activeServer]);
 
-  // Simulate scrolling logs
+  // Real Docker Logs Connection
   useEffect(() => {
-    if (!views.logger) return;
+    if (!views.dockerLogs || !activeServer || !containerName) return;
     
-    const interval = setInterval(() => {
-      setLogLines(prev => {
-        const events = [
-          `[${new Date().toISOString()}] VERBOSE[123] pbx.c: Executing [1001@from-internal:1] Dial("PJSIP/1000", "PJSIP/1001,20") in new stack`,
-          `[${new Date().toISOString()}] WARNING[456] res_pjsip_pubsub.c: No registered subscribe handler for event presence`,
-          `[${new Date().toISOString()}] VERBOSE[789] app_dial.c: Called PJSIP/1001`,
-          `[${new Date().toISOString()}] VERBOSE[789] app_dial.c: PJSIP/1001-00000001 is ringing`,
-          `[${new Date().toISOString()}] VERBOSE[789] app_dial.c: PJSIP/1001-00000001 answered PJSIP/1000`,
-        ];
-        const randomEvent = events[Math.floor(Math.random() * events.length)];
-        const newLines = [...prev, randomEvent];
-        return newLines.slice(-50); // Keep last 50 lines
-      });
-    }, 1500);
+    setDockerStatus("Connecting...");
+    const evtSource = new EventSource(`/api/docker-logs?serverId=${activeServer.id}&container=${encodeURIComponent(containerName)}`);
     
-    return () => clearInterval(interval);
-  }, [views.logger]);
+    evtSource.addEventListener("connected", (e: any) => {
+      const data = JSON.parse(e.data);
+      setDockerStatus("Connected");
+      setDockerLogLines(prev => [...prev, data.message]);
+    });
 
-  // Simulate scrolling docker logs
-  useEffect(() => {
-    if (!views.dockerLogs) return;
-    
-    const interval = setInterval(() => {
+    evtSource.addEventListener("log", (e: any) => {
+      // The data is a simple string for logs
+      let logLine = e.data;
+      try { logLine = JSON.parse(e.data); } catch(e) {}
       setDockerLogLines(prev => {
-        const events = [
-          `ari-server | [INFO] Processing StasisStart event for channel PJSIP/1001-00000001`,
-          `ari-server | [DEBUG] Playing playback 'beep' on channel PJSIP/1001-00000001`,
-          `ari-server | [INFO] Channel PJSIP/1001-00000001 entered application 'ivr-main-menu'`,
-          `ari-server | [DEBUG] Received DTMF '1' from channel PJSIP/1001-00000001`,
-          `ari-server | [INFO] Processing StasisEnd event for channel PJSIP/1000-00000002`,
-        ];
-        const randomEvent = events[Math.floor(Math.random() * events.length)];
-        const newLines = [...prev, randomEvent];
-        return newLines.slice(-50); // Keep last 50 lines
+        const next = [...prev, logLine];
+        return next.length > 500 ? next.slice(next.length - 500) : next;
       });
-    }, 2000);
-    
-    return () => clearInterval(interval);
-  }, [views.dockerLogs]);
+    });
+
+    evtSource.addEventListener("closed", (e: any) => {
+      setDockerStatus("Disconnected");
+    });
+
+    evtSource.addEventListener("error", (e: any) => {
+      setDockerStatus("Error");
+      evtSource.close();
+    });
+
+    return () => {
+      evtSource.close();
+    };
+  }, [views.dockerLogs, activeServer?.id, containerName]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    setTimeout(() => {
-      // Randomly shuffle some statuses for visual effect
-      setEndpoints(prev => prev.map(ep => {
-        if (ep.status === "Unknown" && Math.random() > 0.5) {
-          return { ...ep, status: "Avail", contact: "192.168.1.55:5060", ping: "33ms" };
-        }
-        return ep;
-      }));
-      setContacts(prev => prev.map(c => {
-        if (c.status === "Avail") {
-          const newRtt = (Math.random() * 25 + 5).toFixed(3) + " ms";
-          return { ...c, rtt: newRtt };
-        }
-        return c;
-      }));
-      setIsRefreshing(false);
-    }, 1000);
+    // You could theoretically re-run AmiClient reconnect here, 
+    // but the backend SSE maintains the state.
+    setTimeout(() => setIsRefreshing(false), 500);
   };
 
   if (!activeServer) {
@@ -233,17 +159,66 @@ export default function MonitorPage() {
     );
   }
 
-  const filteredEndpoints = endpoints.filter(ep => {
+  const mappedEndpoints = endpoints.map((ep: any, i) => ({
+    id: ep.Endpoint || ep.ObjectName || `ep-${i}`,
+    name: ep.ObjectName || ep.Endpoint || `Endpoint-${i}`,
+    status: ep.PeerStatus === "Reachable" || ep.DeviceState === "Not in use" ? "Avail" : ep.PeerStatus === "Unreachable" || ep.DeviceState === "Unavailable" ? "Unreachable" : ep.DeviceState || "Unknown",
+    contact: ep.Address || ep.Peer || ep.Contacts || "Unknown",
+    ping: ep.Time ? `${ep.Time}ms` : "N/A"
+  }));
+
+  const filteredEndpoints = mappedEndpoints.filter(ep => {
     const matchesSearch = ep.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || ep.status.toLowerCase() === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  const filteredContacts = contacts.filter(c => {
+  const combinedContacts = new Map();
+
+  // 1. Map endpoints as base contacts
+  (endpoints || []).forEach((ep: any) => {
+    const uri = ep.URI || ep.ContactUri || ep.Address || ep.Contacts;
+    if (uri && uri !== "Unknown URI") {
+       const aor = ep.ObjectName || ep.Endpoint;
+       combinedContacts.set(aor, {
+         id: aor || `ep-${Math.random()}`,
+         uri: uri,
+         aor: aor || "Unknown AOR",
+         hash: ep.Hash || "N/A",
+         status: ep.PeerStatus === "Reachable" || ep.DeviceState === "Not in use" ? "Avail" : ep.PeerStatus === "Unreachable" || ep.DeviceState === "Unavailable" ? "Unavail" : ep.DeviceState || "Unknown",
+         rtt: ep.Time ? `${ep.Time}ms` : "N/A"
+       });
+    }
+  });
+
+  // 2. Override with real-time contact events
+  (contacts || []).forEach((c: any) => {
+     const aor = c.AOR || c.Aor || c.ObjectName || "Unknown AOR";
+     const uri = c.URI || c.ContactUri || c.Address || c.Contacts;
+     
+     if (c.ContactStatus === "Removed") {
+        combinedContacts.delete(aor);
+        return;
+     }
+
+     if (uri && uri !== "Unknown URI") {
+       combinedContacts.set(aor, {
+         id: c.ObjectName || c.URI || aor,
+         uri: uri,
+         aor: aor,
+         hash: c.Hash || "N/A",
+         status: c.ContactStatus === "Reachable" || c.Status === "NonQual" || c.ContactStatus === "Created" || c.ContactStatus === "NonQualified" ? "Avail" : c.ContactStatus === "Unreachable" || c.ContactStatus === "Removed" ? "Unavail" : c.ContactStatus || c.Status || "Unknown",
+         rtt: c.RoundtripUsec ? `${(parseInt(c.RoundtripUsec)/1000).toFixed(2)}ms` : c.RTT ? `${c.RTT}ms` : c.Time ? `${c.Time}ms` : "N/A"
+       });
+     }
+  });
+
+  const mappedContacts = Array.from(combinedContacts.values());
+
+  const filteredContacts = mappedContacts.filter(c => {
     const matchesSearch = 
       c.uri.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.aor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.hash.toLowerCase().includes(searchTerm.toLowerCase());
+      c.aor.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = 
       statusFilter === "all" || 
       (statusFilter === "avail" && c.status === "Avail") ||
@@ -254,8 +229,8 @@ export default function MonitorPage() {
 
   return (
     <PageContainer>
-      <div className="flex flex-col space-y-6 h-full">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+      <div className="flex flex-col h-[calc(100vh-100px)]">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 shrink-0 mb-6">
           <div>
             <h1 className="text-3xl font-bold tracking-tight flex items-center">
               <Radar className="mr-3 h-8 w-8 text-emerald-500" />
@@ -263,6 +238,11 @@ export default function MonitorPage() {
             </h1>
             <p className="text-muted-foreground mt-2">
               Real-time endpoint & registration status for {activeServer.name}.
+              {isConnected ? (
+                <span className="ml-3 inline-flex items-center text-xs font-medium text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full"><span className="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-1.5 animate-pulse"></span>Live</span>
+              ) : (
+                <span className="ml-3 inline-flex items-center text-xs font-medium text-zinc-500 bg-zinc-500/10 px-2 py-0.5 rounded-full"><span className="w-1.5 h-1.5 bg-zinc-500 rounded-full mr-1.5"></span>Offline</span>
+              )}
             </p>
           </div>
           
@@ -294,7 +274,7 @@ export default function MonitorPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 mb-2 p-3 bg-card border border-border rounded-lg">
+        <div className="flex flex-wrap items-center gap-2 mb-2 p-3 bg-card border border-border rounded-lg shrink-0">
           <span className="text-sm font-semibold text-muted-foreground mr-2">Visible Panels:</span>
           <Button 
             variant={views.endpoints ? "default" : "outline"} 
@@ -323,7 +303,7 @@ export default function MonitorPage() {
           <Button 
             variant={views.channels ? "default" : "outline"} 
             size="sm" 
-            className={`h-8 ${views.channels ? 'bg-purple-600 hover:bg-purple-700' : ''}`}
+            className={`h-8 ${views.channels ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''}`}
             onClick={() => setViews(prev => ({...prev, channels: !prev.channels}))}
           >
             Active Channels
@@ -331,7 +311,7 @@ export default function MonitorPage() {
           <Button 
             variant={views.ariApps ? "default" : "outline"} 
             size="sm" 
-            className={`h-8 ${views.ariApps ? 'bg-orange-600 hover:bg-orange-700' : ''}`}
+            className={`h-8 ${views.ariApps ? 'bg-orange-600 hover:bg-orange-700 text-white' : ''}`}
             onClick={() => setViews(prev => ({...prev, ariApps: !prev.ariApps}))}
           >
             ARI Applications
@@ -339,7 +319,7 @@ export default function MonitorPage() {
           <Button 
             variant={views.rtp ? "default" : "outline"} 
             size="sm" 
-            className={`h-8 ${views.rtp ? 'bg-indigo-600 hover:bg-indigo-700' : ''}`}
+            className={`h-8 ${views.rtp ? 'bg-pink-600 hover:bg-pink-700 text-white' : ''}`}
             onClick={() => setViews(prev => ({...prev, rtp: !prev.rtp}))}
           >
             RTP Stats
@@ -362,8 +342,8 @@ export default function MonitorPage() {
           </Button>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-4 items-start">
-          <div className="flex-1 rounded-md overflow-hidden space-y-4 w-full">
+        <div className="flex flex-col lg:flex-row gap-4 items-start flex-1 overflow-hidden">
+          <div className="flex-1 overflow-y-auto h-full space-y-4 w-full pr-2 pb-6">
           {views.channels && (
             <div className="overflow-x-auto border border-border bg-card rounded-md">
               <h2 className="text-sm font-semibold text-muted-foreground p-4 bg-muted/20">Active Calls / Channels</h2>
@@ -382,12 +362,12 @@ export default function MonitorPage() {
                       <td colSpan={4} className="px-6 py-8 text-center text-muted-foreground">No active channels.</td>
                     </tr>
                   ) : (
-                    channels.map((ch) => (
-                      <tr key={ch.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                        <td className="px-6 py-4 font-mono font-medium text-emerald-400">{ch.channel}</td>
-                        <td className="px-6 py-4">{ch.state}</td>
-                        <td className="px-6 py-4 text-muted-foreground">{ch.application}</td>
-                        <td className="px-6 py-4 font-mono">{ch.duration}</td>
+                    channels.map((ch: any, i) => (
+                      <tr key={ch.Uniqueid || i} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                        <td className="px-6 py-4 font-mono font-medium text-emerald-400">{ch.Channel}</td>
+                        <td className="px-6 py-4">{ch.ChannelStateDesc}</td>
+                        <td className="px-6 py-4 text-muted-foreground">{ch.Application}</td>
+                        <td className="px-6 py-4 font-mono">--:--:--</td>
                       </tr>
                     ))
                   )}
@@ -568,24 +548,21 @@ export default function MonitorPage() {
                       <td colSpan={3} className="px-6 py-8 text-center text-muted-foreground">No outbound registrations found.</td>
                     </tr>
                   ) : (
-                    registrations.map((reg) => (
-                      <tr key={reg.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                        <td className="px-6 py-4 font-mono font-medium text-foreground">{reg.name}</td>
-                        <td className="px-6 py-4 font-mono text-muted-foreground">{reg.auth}</td>
+                    registrations.map((reg: any, i) => (
+                      <tr key={i} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                        <td className="px-6 py-4 font-mono font-medium text-foreground">{reg.Domain || reg.ObjectName || reg.ServerUri}</td>
+                        <td className="px-6 py-4 font-mono text-muted-foreground">{reg.Username || reg.Auth || reg.ClientUri}</td>
                         <td className="px-6 py-4">
                           <div className="flex items-center space-x-2">
-                            {reg.status === "Registered" ? (
+                            {reg.Status === "Registered" ? (
                               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-500">
                                 Registered
                               </span>
                             ) : (
                               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-destructive/10 text-destructive">
-                                {reg.status}
+                                {reg.Status || "Unknown"}
                               </span>
                             )}
-                            <span className="text-xs text-muted-foreground font-mono">
-                              {reg.exp.startsWith('-') ? `(exp. ${reg.exp.substring(1)}s ago)` : `(exp. ${reg.exp})`}
-                            </span>
                           </div>
                         </td>
                       </tr>
@@ -663,41 +640,85 @@ export default function MonitorPage() {
 
               {/* Logger Panel */}
               <div 
-                className="w-full shrink-0 sticky top-4 overflow-hidden border border-border bg-black rounded-md flex flex-col h-[calc(100vh-32px)]"
+                className="w-full shrink-0 overflow-hidden border border-border bg-black rounded-md flex flex-col h-full"
                 style={{ width: typeof window !== 'undefined' && window.innerWidth >= 1024 ? `${loggerWidth}px` : '100%' }}
               >
                 <div className="text-sm font-semibold text-zinc-400 p-2 bg-zinc-900 border-b border-zinc-800 flex justify-between items-center shrink-0">
                   <span>Asterisk CLI & Logger</span>
                   <div className="flex space-x-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-red-500"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-green-500"></span>
+                    <button onClick={clearLogs} className="text-[10px] text-zinc-500 hover:text-zinc-300 mr-2 border border-zinc-700 px-2 py-0.5 rounded">Clear</button>
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+                    <span className="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>
+                    <span className="w-2.5 h-2.5 rounded-full bg-green-500"></span>
+                  </div>
                 </div>
+              <div className="flex-1 p-4 overflow-y-auto font-mono text-xs text-zinc-350 whitespace-pre-wrap flex flex-col"
+                   ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}>
+                {amiLogs.length === 0 ? (
+                  <div className="text-zinc-600 italic">No logs yet...</div>
+                ) : (
+                  amiLogs.map((log, i) => {
+                    if (log.startsWith('[System]')) return <div key={i} className="text-emerald-500 font-semibold">{log}</div>;
+                    if (log.startsWith('[Error]')) return <div key={i} className="text-red-500 font-semibold">{log}</div>;
+                    if (log.startsWith('[Event]')) return <div key={i} className="text-blue-400">{log}</div>;
+                    if (log.startsWith('> ')) return <div key={i} className="text-white font-bold mt-2">{log}</div>;
+                    return <div key={i} className={`whitespace-pre-wrap mb-1 leading-relaxed ${log.includes('Error') || log.includes('WARNING') ? 'text-red-400' : log.includes('System') || log.includes('Connected') ? 'text-emerald-400' : 'text-zinc-300'}`}>{log}</div>;
+                  })
+                )}
               </div>
-              <div className="p-2 bg-zinc-950 border-b border-zinc-800 flex items-center shrink-0">
-                <span className="text-emerald-500 font-mono mr-2 ml-1">{'>'}</span>
+              <div className="p-2 bg-zinc-950 border-t border-zinc-800 flex items-center shrink-0">
+                <span className="text-emerald-500 font-mono mr-2 ml-1 whitespace-nowrap">{activeServer.name}*CLI{'>'}</span>
                 <input 
                   type="text" 
                   className="w-full bg-transparent border-none text-emerald-400 font-mono text-sm focus:outline-none focus:ring-0 placeholder-zinc-600"
-                  placeholder="Execute CLI cmd..."
-                  onKeyDown={(e) => {
+                  placeholder="Execute CLI cmd... (e.g. core show uptime)"
+                  onKeyDown={async (e) => {
                     if (e.key === 'Enter') {
-                      const cmd = e.currentTarget.value;
+                      let cmd = e.currentTarget.value;
                       if (!cmd.trim()) return;
-                      setLogLines(prev => [...prev, `root@${activeServer?.id}*CLI> ${cmd}`, `Command executed successfully. (Mock output for: ${cmd})`].slice(-500));
                       e.currentTarget.value = '';
+                      
+                      if (cmd.trim().toLowerCase() === 'clear') {
+                        clearLogs();
+                        return;
+                      }
+
+                      // Strip 'asterisk -rx' or 'asterisk -x' if user pasted it
+                      const asteriskRxMatch = cmd.match(/^asterisk\s+-r?x\s+["'](.*)["']$/i) || cmd.match(/^asterisk\s+-r?x\s+(.*)$/i);
+                      if (asteriskRxMatch) {
+                        cmd = asteriskRxMatch[1];
+                      }
+
+                      addLog(`> ${cmd}`);
+                      try {
+                        const res = await fetch('/api/ami/action', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            serverId: activeServer.id,
+                            action: 'Command',
+                            Command: cmd
+                          })
+                        });
+                        const data = await res.json();
+                        if (data.success && data.data) {
+                          // The raw AMI response usually includes the output in `output` or as an array
+                          const output = data.data.Output || data.data.output || data.data.response || data.data;
+                          let lines = Array.isArray(output) ? output : typeof output === 'string' ? output.split('\n') : [JSON.stringify(output)];
+                          // Filter out empty lines to avoid spam
+                          lines = lines.filter((l: string) => l.trim() !== '');
+                          lines.forEach((l: string) => addLog(l));
+                        } else {
+                          addLog(`[Error] ${data.error || 'Failed to execute command'}`);
+                        }
+                      } catch (err: any) {
+                        addLog(`[Error] ${err.message}`);
+                      }
                     }
                   }}
                 />
               </div>
-              <div className="p-4 font-mono text-xs overflow-y-auto flex-1 h-full block">
-                {logLines.map((line, i) => (
-                  <div key={i} className={`whitespace-pre-wrap mb-1 leading-relaxed ${line.includes('ERROR') || line.includes('WARNING') ? 'text-red-400' : line.includes('Asterisk ready') || line.includes('*CLI>') ? 'text-emerald-400' : 'text-zinc-300'}`}>
-                    {line}
-                  </div>
-                ))}
               </div>
-            </div>
             </>
           )}
 
@@ -732,16 +753,25 @@ export default function MonitorPage() {
 
               {/* Docker Logs Panel */}
               <div 
-                className="w-full shrink-0 sticky top-4 overflow-hidden border border-sky-900/50 bg-[#0d1117] rounded-md flex flex-col h-[calc(100vh-32px)]"
+                className="w-full shrink-0 overflow-hidden border border-sky-900/50 bg-[#0d1117] rounded-md flex flex-col h-full"
                 style={{ width: typeof window !== 'undefined' && window.innerWidth >= 1024 ? `${dockerLoggerWidth}px` : '100%' }}
               >
                 <div className="text-sm font-semibold text-zinc-300 p-2 bg-[#161b22] border-b border-[#30363d] flex justify-between items-center shrink-0">
-                  <div className="flex items-center">
-                    <span className="text-sky-400 mr-2">🐳</span>
-                    <span>Docker Logs: ari-server</span>
+                  <div className="flex items-center space-x-3">
+                    <span className="text-sky-400">🐳</span>
+                    <input 
+                      type="text" 
+                      value={containerName}
+                      onChange={(e) => setContainerName(e.target.value)}
+                      placeholder="Container name (e.g. ari-server)"
+                      className="bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-xs text-zinc-300 outline-none focus:border-sky-500 w-48"
+                    />
                   </div>
-                  <div className="flex space-x-2">
-                    <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 bg-muted rounded border border-border">--tail 20 -f</span>
+                  <div className="flex space-x-2 items-center">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${dockerStatus === 'Connected' ? 'bg-emerald-500/20 text-emerald-400' : dockerStatus.includes('Error') ? 'bg-red-500/20 text-red-400' : 'bg-zinc-500/20 text-zinc-400'}`}>
+                      {dockerStatus}
+                    </span>
+                    <button onClick={() => setDockerLogLines([])} className="text-[10px] text-muted-foreground hover:text-zinc-300 px-1.5 py-0.5 bg-muted rounded border border-border">Clear</button>
                   </div>
                 </div>
                 <div className="p-4 font-mono text-xs overflow-y-auto flex-1 h-full block">

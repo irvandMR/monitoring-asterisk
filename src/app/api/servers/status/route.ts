@@ -49,7 +49,8 @@ export async function GET(req: Request) {
     const serverUp = await checkPort(server.ip, 22);
     
     // Check AMI port (default 5038) for Asterisk Status
-    const asteriskUp = await checkPort(server.ip, server.port || 5038);
+    const amiHost = server.amiHost || server.ip;
+    const asteriskUp = await checkPort(amiHost, server.port || 5038);
 
     return NextResponse.json({
       success: true,
